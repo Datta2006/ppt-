@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPTX Viewer</title>
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <!-- PWA Theme Color -->
+    <meta name="theme-color" content="#4f46e5">
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons for UI elements -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Core libraries for reading PPTX files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pptx2html@0.1.6/dist/pptx2html.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom styles for the file input button */
+        .file-input-button {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            background-color: #4f46e5;
+            color: white;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            transition: background-color 0.3s;
+        }
+        .file-input-button:hover {
+            background-color: #4338ca;
+        }
+        /* Styles for the rendered presentation slides */
+        #presentation-container .slide {
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            display: none; /* Hide all slides by default */
+        }
+        #presentation-container .slide.active {
+            display: block; /* Show only the active slide */
+        }
+        /* Styles to make the presentation content responsive */
+        #presentation-container .slide-content {
+             position: relative;
+             width: 100%;
+             padding-top: 56.25%; /* 16:9 Aspect Ratio */
+             overflow: hidden;
+        }
+        #presentation-container .slide-content > div {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-origin: top left;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex items-center justify-center min-h-screen">
+
+    <div class="container mx-auto p-4 max-w-4xl w-full">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600">PPTX Viewer</h1>
+            <p class="text-slate-500 mt-2">Upload and view your PowerPoint files on any device.</p>
+        </header>
+
+        <main id="app-container" class="bg-white p-4 sm:p-8 rounded-xl shadow-lg w-full">
+            <!-- Upload View -->
+            <div id="upload-view">
+                <div class="text-center">
+                    <div class="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-indigo-100">
+                        <i class="ph-file-ppt text-5xl text-indigo-600"></i>
+                    </div>
+                    <h2 class="text-2xl font-semibold mt-4">Select a Presentation</h2>
+                    <p class="text-slate-500 mt-2">Choose a `.pptx` file from your device to begin.</p>
+                    <div class="mt-8">
+                        <label for="file-upload" class="file-input-button">
+                            <i class="ph-upload-simple mr-2 text-xl"></i>
+                            <span>Choose File</span>
+                        </label>
+                        <input id="file-upload" type="file" class="hidden" accept=".pptx">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Viewer View -->
+            <div id="viewer-view" class="hidden">
+                <div id="presentation-container" class="w-full mb-4 bg-slate-200 rounded-lg p-2 sm:p-4">
+                    <!-- Slides will be rendered here -->
+                </div>
+
+                <div id="navigation-controls" class="flex items-center justify-between">
+                    <button id="close-btn" class="flex items-center px-4 py-2 bg-slate-200 hover:bg-slate-300 rounded-lg transition-colors">
+                        <i class="ph-arrow-left mr-2"></i>
+                        <span>New File</span>
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <button id="prev-btn" class="p-3 bg-slate-200 hover:bg-slate-300 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <i class="ph-caret-left text-xl"></i>
+                        </button>
+                        <div class="text-center font-medium tabular-nums">
+                            <span id="current-slide-num">1</span>
+                            /
+                            <span id="total-slides-num">1</span>
+                        </div>
+                        <button id="next-btn" class="p-3 bg-slate-200 hover:bg-slate-300 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <i class="ph-caret-right text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+             <!-- Loading Overlay -->
+            <div id="loading-overlay" class="hidden absolute inset-0 bg-white bg-opacity-80 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-xl">
+                 <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                 <p class="mt-4 text-lg font-medium text-slate-600">Processing your presentation...</p>
+            </div>
+             <!-- Error Message -->
+            <div id="error-message" class="hidden mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                <!-- Error content goes here -->
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // DOM Element References
+        const appContainer = document.getElementById('app-container');
+        const uploadView = document.getElementById('upload-view');
+        const viewerView = document.getElementById('viewer-view');
+        const fileUpload = document.getElementById('file-upload');
+        const presentationContainer = document.getElementById('presentation-container');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const closeBtn = document.getElementById('close-btn');
+        const currentSlideNum = document.getElementById('current-slide-num');
+        const totalSlidesNum = document.getElementById('total-slides-num');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const errorMessage = document.getElementById('error-message');
+
+        // Application State
+        let currentSlide = 0;
+        let totalSlides = 0;
+        let slides = [];
+
+        // --- Event Listeners ---
+        fileUpload.addEventListener('change', handleFileUpload);
+        prevBtn.addEventListener('click', showPreviousSlide);
+        nextBtn.addEventListener('click', showNextSlide);
+        closeBtn.addEventListener('click', resetApp);
+        
+        // --- Core Functions ---
+
+        /**
+         * Handles the file selection event.
+         * @param {Event} event - The file input change event.
+         */
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.name.endsWith('.pptx')) {
+                showError("Please select a valid .pptx file.");
+                return;
+            }
+            
+            hideError();
+            showLoading(true);
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    await processPresentation(e.target.result);
+                    showView('viewer');
+                } catch (err) {
+                    console.error("Error processing presentation:", err);
+                    showError("Could not process the presentation file. It may be corrupt or in an unsupported format.");
+                    resetApp();
+                } finally {
+                    showLoading(false);
+                }
+            };
+            reader.onerror = () => {
+                showError("Failed to read the file.");
+                showLoading(false);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /**
+         * Processes the ArrayBuffer of the PPTX file and renders it.
+         * @param {ArrayBuffer} data - The file data.
+         */
+        async function processPresentation(data) {
+            // Reset previous presentation state
+            presentationContainer.innerHTML = '';
+            
+            const pptx = pptx2html(data);
+            
+            // Render all slides into the container.
+            // Note: The library renders slides into the target element.
+            await pptx.render({
+                target: presentationContainer,
+                slide: "all"
+            });
+            
+            // After rendering, manage slides for navigation
+            slides = presentationContainer.querySelectorAll('.slide');
+            totalSlides = slides.length;
+            
+            if (totalSlides > 0) {
+                currentSlide = 0;
+                updateSlidesAndNavigation();
+            } else {
+                 showError("No slides were found in this presentation.");
+                 resetApp();
+            }
+        }
+        
+        /**
+         * Shows a specific slide by its index.
+         * @param {number} index - The index of the slide to show.
+         */
+        function showSlide(index) {
+            if (index < 0 || index >= totalSlides) return;
+
+            slides.forEach((slide, i) => {
+                slide.classList.toggle('active', i === index);
+            });
+            currentSlide = index;
+            updateNavigationControls();
+        }
+
+        /**
+         * Updates the slide display and navigation controls state.
+         */
+        function updateSlidesAndNavigation() {
+            totalSlidesNum.textContent = totalSlides;
+            showSlide(0); // Start with the first slide
+        }
+
+        /**
+         * Updates the state and text of navigation controls.
+         */
+        function updateNavigationControls() {
+            currentSlideNum.textContent = currentSlide + 1;
+            prevBtn.disabled = currentSlide === 0;
+            nextBtn.disabled = currentSlide === totalSlides - 1;
+        }
+
+        function showPreviousSlide() {
+            if (currentSlide > 0) {
+                showSlide(currentSlide - 1);
+            }
+        }
+
+        function showNextSlide() {
+            if (currentSlide < totalSlides - 1) {
+                showSlide(currentSlide + 1);
+            }
+        }
+
+        // --- UI Helper Functions ---
+
+        /**
+         * Switches between the 'upload' and 'viewer' views.
+         * @param {('upload'|'viewer')} viewName - The name of the view to show.
+         */
+        function showView(viewName) {
+            uploadView.classList.toggle('hidden', viewName !== 'upload');
+            viewerView.classList.toggle('hidden', viewName !== 'viewer');
+        }
+
+        /**
+         * Shows or hides the loading overlay.
+         * @param {boolean} isLoading - Whether to show the loader.
+         */
+        function showLoading(isLoading) {
+            loadingOverlay.classList.toggle('hidden', !isLoading);
+        }
+
+        /**
+         * Displays an error message to the user.
+         * @param {string} message - The error message to display.
+         */
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the error message.
+         */
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+        /**
+         * Resets the application to its initial state.
+         */
+        function resetApp() {
+            fileUpload.value = ''; // Clear the file input
+            presentationContainer.innerHTML = '';
+            slides = [];
+            currentSlide = 0;
+            totalSlides = 0;
+            hideError();
+            showView('upload');
+        }
+
+        // --- PWA Service Worker Registration ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
+
